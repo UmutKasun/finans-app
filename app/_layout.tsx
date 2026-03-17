@@ -6,37 +6,39 @@ import 'react-native-url-polyfill/auto';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Session } from '@supabase/supabase-js';
-import { router } from 'expo-router';
-
+import { View } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Slot, useRouter } from 'expo-router';
 
 export default function RootLayout() {
     const colorScheme = useColorScheme();
     const [session, setSession] = useState<Session | null>(null)
     const [loading, setLoading] = useState(true)
+    const router = useRouter()
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session)
             setLoading(false)
-            if (session) {
-                router.replace('/(tabs)')
-            } else {
-                router.replace('/login')
-            }
         })
 
-        supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             setSession(session)
-            if (session) {
-                router.replace('/(tabs)')
-            } else {
-                router.replace('/login')
-            }
         })
+
+        return () => subscription.unsubscribe()
     }, [])
 
-    if (loading) return null
+    useEffect(() => {
+        if (loading) return
+        if (session) {
+            router.replace('/(tabs)')
+        } else {
+            router.replace('/login')
+        }
+    }, [session, loading])
+
+    if (loading) return <View style={{ flex: 1, backgroundColor: '#f8f9fa' }} />
 
     return (
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
