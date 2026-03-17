@@ -1,3 +1,4 @@
+import { router } from 'expo-router'
 import 'react-native-url-polyfill/auto'
 import { useEffect, useState } from 'react'
 import {
@@ -109,7 +110,7 @@ export default function Dashboard() {
         </ScrollView>
 
         {/* Hızlı Ekle Butonu */}
-        <TouchableOpacity style={styles.fab}>
+        <TouchableOpacity style={styles.fab} onPress={() => router.push('/add-transaction')}>
           <Text style={styles.fabText}>+ İşlem Ekle</Text>
         </TouchableOpacity>
       </SafeAreaView>

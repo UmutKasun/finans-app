@@ -1,9 +1,58 @@
+import { useState, useEffect } from 'react'
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native'
+import { router } from 'expo-router'
+import { supabase } from '../../lib/supabase'
+
+type Transaction = {
+    id: string
+    amount: number
+    type: string
+    category: string
+    note: string
+    date: string
+}
 
 export default function Transactions() {
+    const [transactions, setTransactions] = useState<Transaction[]>([])
+    const [totalIncome, setTotalIncome] = useState(0)
+    const [totalExpense, setTotalExpense] = useState(0)
+
+    useEffect(() => {
+        fetchTransactions()
+    }, [])
+
+    async function fetchTransactions() {
+        const { data: { user } } = await supabase.auth.getUser()
+        const { data, error } = await supabase
+            .from('transactions')
+            .select('*')
+            .eq('user_id', user?.id)
+            .order('date', { ascending: false })
+
+        if (data) {
+            setTransactions(data)
+            const income = data.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0)
+            const expense = data.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0)
+            setTotalIncome(income)
+            setTotalExpense(expense)
+        }
+    }
+
+    const categoryIcons: { [key: string]: string } = {
+        'Market': '🛒', 'Yemek': '🍽️', 'Kahve': '☕',
+        'Ulaşım': '🚗', 'Kira': '🏠', 'Fatura': '⚡',
+        'Giyim': '👕', 'Eğlence': '🎮', 'Sağlık': '💊',
+        'Eğitim': '📚', 'Maaş': '💰', 'Diğer': '📦',
+    }
+
+    function formatDate(dateStr: string) {
+        const date = new Date(dateStr)
+        return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })
+    }
+
     return (
         <SafeAreaView style={styles.safe}>
-            <ScrollView style={styles.container}>
+            <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
 
                 {/* Header */}
                 <View style={styles.header}>
@@ -17,25 +66,55 @@ export default function Transactions() {
                 <View style={styles.row}>
                     <View style={[styles.miniCard, { borderLeftColor: '#2ECC71' }]}>
                         <Text style={styles.miniLabel}>Toplam Gelir</Text>
-                        <Text style={[styles.miniAmount, { color: '#2ECC71' }]}>₺0</Text>
+                        <Text style={[styles.miniAmount, { color: '#2ECC71' }]}>
+                            ₺{totalIncome.toLocaleString('tr-TR')}
+                        </Text>
                     </View>
                     <View style={[styles.miniCard, { borderLeftColor: '#E74C3C' }]}>
                         <Text style={styles.miniLabel}>Toplam Gider</Text>
-                        <Text style={[styles.miniAmount, { color: '#E74C3C' }]}>₺0</Text>
+                        <Text style={[styles.miniAmount, { color: '#E74C3C' }]}>
+                            ₺{totalExpense.toLocaleString('tr-TR')}
+                        </Text>
                     </View>
                 </View>
 
-                {/* Boş durum */}
-                <View style={styles.empty}>
-                    <Text style={styles.emptyIcon}>💳</Text>
-                    <Text style={styles.emptyTitle}>Henüz işlem yok</Text>
-                    <Text style={styles.emptyText}>Aşağıdaki butona tıklayarak ilk işlemini ekle</Text>
-                </View>
+                {/* İşlem Listesi */}
+                {transactions.length === 0 ? (
+                    <View style={styles.empty}>
+                        <Text style={styles.emptyIcon}>💳</Text>
+                        <Text style={styles.emptyTitle}>Henüz işlem yok</Text>
+                        <Text style={styles.emptyText}>Aşağıdaki butona tıklayarak ilk işlemini ekle</Text>
+                    </View>
+                ) : (
+                    <View style={styles.card}>
+                        {transactions.map((tx, index) => (
+                            <View key={tx.id} style={[
+                                styles.txRow,
+                                index < transactions.length - 1 && styles.txBorder
+                            ]}>
+                                <View style={styles.txLeft}>
+                                    <Text style={styles.txIcon}>{categoryIcons[tx.category] || '📦'}</Text>
+                                    <View>
+                                        <Text style={styles.txTitle}>{tx.category}</Text>
+                                        {tx.note ? <Text style={styles.txNote}>{tx.note}</Text> : null}
+                                        <Text style={styles.txDate}>{formatDate(tx.date)}</Text>
+                                    </View>
+                                </View>
+                                <Text style={[
+                                    styles.txAmount,
+                                    { color: tx.type === 'income' ? '#2ECC71' : '#E74C3C' }
+                                ]}>
+                                    {tx.type === 'income' ? '+' : '-'}₺{tx.amount.toLocaleString('tr-TR')}
+                                </Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
 
+                <View style={{ height: 100 }} />
             </ScrollView>
 
-            {/* Hızlı Ekle */}
-            <TouchableOpacity style={styles.fab}>
+            <TouchableOpacity style={styles.fab} onPress={() => router.push('/add-transaction')}>
                 <Text style={styles.fabText}>+ İşlem Ekle</Text>
             </TouchableOpacity>
         </SafeAreaView>
@@ -65,9 +144,26 @@ const styles = StyleSheet.create({
     },
     miniLabel: { fontSize: 12, color: '#888', marginBottom: 6 },
     miniAmount: { fontSize: 20, fontWeight: 'bold' },
+    card: {
+        backgroundColor: '#fff', borderRadius: 16,
+        marginBottom: 16, shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06, shadowRadius: 6, elevation: 3,
+        overflow: 'hidden'
+    },
+    txRow: {
+        flexDirection: 'row', justifyContent: 'space-between',
+        alignItems: 'center', padding: 16
+    },
+    txBorder: { borderBottomWidth: 1, borderBottomColor: '#f5f5f5' },
+    txLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    txIcon: { fontSize: 24 },
+    txTitle: { fontSize: 15, fontWeight: '500', color: '#1a1a2e' },
+    txNote: { fontSize: 12, color: '#888', marginTop: 2 },
+    txDate: { fontSize: 12, color: '#aaa', marginTop: 2 },
+    txAmount: { fontSize: 15, fontWeight: '600' },
     empty: {
-        alignItems: 'center', justifyContent: 'center',
-        paddingVertical: 60
+        alignItems: 'center', justifyContent: 'center', paddingVertical: 60
     },
     emptyIcon: { fontSize: 48, marginBottom: 16 },
     emptyTitle: { fontSize: 18, fontWeight: '600', color: '#1a1a2e', marginBottom: 8 },
